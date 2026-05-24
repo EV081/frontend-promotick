@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import FilesMenu from "@/components/FilesMenu";
 
 export default function DashboardHeader() {
   const { user, logout } = useAuth();
@@ -16,6 +17,7 @@ export default function DashboardHeader() {
     <header className="bg-promotick-charcoal border-b border-promotick-gray-dark px-6 py-4">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-3">
+          <FilesMenu />
           <div className="w-8 h-8 bg-promotick-red rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-sm">P</span>
           </div>
