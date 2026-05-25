@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 
 export const metadata: Metadata = {
   title: "Promotick - Dashboard de Tickets",
@@ -13,9 +14,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
-      <body className="bg-gray-50 min-h-screen">
-        <AuthProvider>{children}</AuthProvider>
+    <html lang="es" suppressHydrationWarning>
+      <body className="min-h-screen antialiased" style={{ background: "var(--t-bg-base)", color: "var(--t-text-primary)" }}>
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

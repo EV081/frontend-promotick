@@ -1,6 +1,7 @@
 "use client";
 
 import { PieChart, Pie, Cell } from "recharts";
+import { useTheme } from "@/context/ThemeContext";
 
 interface GaugeChartProps {
   value: number;
@@ -8,20 +9,27 @@ interface GaugeChartProps {
 }
 
 export default function GaugeChart({ value, titulo }: GaugeChartProps) {
-  const data = [
-    { value: value },
-    { value: 100 - value },
-  ];
+  const { isDark } = useTheme();
+  const data = [{ value }, { value: 100 - value }];
 
   const getColor = (val: number) => {
-    if (val >= 90) return "#22C55E";
+    if (val >= 90) return "#22c55e";
     if (val >= 70) return "#e73137";
     return "#cf0700";
   };
 
   return (
-    <div className="bg-white rounded-xl border border-promotick-gray-lighter p-5 shadow-sm flex flex-col items-center">
-      <p className="text-sm font-medium text-promotick-gray mb-2">{titulo}</p>
+    <div
+      className="rounded-xl p-5 flex flex-col items-center"
+      style={{
+        background: "var(--t-bg-card)",
+        border: "1px solid var(--t-border-card)",
+        boxShadow: "var(--t-shadow-card)",
+      }}
+    >
+      <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--t-text-muted)" }}>
+        {titulo}
+      </p>
       <PieChart width={180} height={100}>
         <Pie
           data={data}
@@ -35,10 +43,12 @@ export default function GaugeChart({ value, titulo }: GaugeChartProps) {
           stroke="none"
         >
           <Cell fill={getColor(value)} />
-          <Cell fill="#dfdfdf" />
+          <Cell fill={isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"} />
         </Pie>
       </PieChart>
-      <p className="text-2xl font-bold text-promotick-dark -mt-2">{value}%</p>
+      <p className="text-2xl font-bold tabular-nums -mt-2" style={{ color: "var(--t-text-primary)" }}>
+        {value}%
+      </p>
     </div>
   );
 }
