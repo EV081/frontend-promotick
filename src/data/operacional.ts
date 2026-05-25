@@ -9,9 +9,9 @@ export const operacionalData: OperacionalData = {
   cumplimientoSLA: 92,
   reabiertos: 3,
   porPrioridad: [
-    { name: "Alta", value: 10, color: "#cf0700" },
-    { name: "Media", value: 22, color: "#e73137" },
-    { name: "Baja", value: 10, color: "#bababa" },
+    { name: "Alta", value: 10, color: "#f43f5e" },
+    { name: "Media", value: 22, color: "#f59e0b" },
+    { name: "Baja", value: 10, color: "#64748b" },
   ],
   porCategoria: [
     { categoria: "Solicitud Operativa", count: 35 },

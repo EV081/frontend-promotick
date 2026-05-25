@@ -1,6 +1,7 @@
 "use client";
 
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
+import { useTheme } from "@/context/ThemeContext";
 
 interface DonutChartProps {
   data: { name: string; value: number; color: string }[];
@@ -8,9 +9,27 @@ interface DonutChartProps {
 }
 
 export default function DonutChart({ data, titulo }: DonutChartProps) {
+  const { isDark } = useTheme();
+  const tooltipStyle = {
+    background: isDark ? "#1a1a1a" : "#ffffff",
+    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.12)"}`,
+    borderRadius: "8px",
+  };
+  const itemStyle = { color: isDark ? "#bababa" : "#4d4d4d" };
+  const labelStyle = { color: isDark ? "#ffffff" : "#111111" };
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-      <p className="text-sm font-medium text-gray-500 mb-3">{titulo}</p>
+    <div
+      className="rounded-xl p-5"
+      style={{
+        background: "var(--t-bg-card)",
+        border: "1px solid var(--t-border-card)",
+        boxShadow: "var(--t-shadow-card)",
+      }}
+    >
+      <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--t-text-muted)" }}>
+        {titulo}
+      </p>
       <ResponsiveContainer width="100%" height={250}>
         <PieChart>
           <Pie
@@ -26,8 +45,8 @@ export default function DonutChart({ data, titulo }: DonutChartProps) {
               <Cell key={index} fill={entry.color} />
             ))}
           </Pie>
-          <Tooltip />
-          <Legend />
+          <Tooltip contentStyle={tooltipStyle} itemStyle={itemStyle} labelStyle={labelStyle} />
+          <Legend wrapperStyle={{ color: isDark ? "#bababa" : "#4d4d4d", fontSize: "12px" }} />
         </PieChart>
       </ResponsiveContainer>
     </div>
