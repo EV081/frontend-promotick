@@ -81,13 +81,21 @@ export default function OperacionalPage() {
   useGSAP(() => {
     const cards = mainRef.current?.querySelectorAll(".kpi-card");
     if (cards && cards.length > 0) {
-      gsap.from(cards, { y: 30, opacity: 0, duration: 0.5, stagger: 0.08, ease: "power2.out" });
+      gsap.fromTo(
+        cards,
+        { y: 30, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.5, stagger: 0.08, ease: "power2.out" }
+      );
     }
     const sections = mainRef.current?.querySelectorAll(".anim-section");
     if (sections && sections.length > 0) {
-      gsap.from(sections, { y: 20, opacity: 0, duration: 0.5, stagger: 0.1, ease: "power2.out", delay: 0.3 });
+      gsap.fromTo(
+        sections,
+        { y: 20, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.5, stagger: 0.1, ease: "power2.out", delay: 0.3 }
+      );
     }
-  }, { scope: mainRef, dependencies: [data] });
+  }, { scope: mainRef });
 
   useEffect(() => {
     if (isLoading) return;

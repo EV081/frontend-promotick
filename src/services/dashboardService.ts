@@ -1,5 +1,6 @@
 import { BACKEND_URL } from "./config";
 
+// ── Legacy endpoints (operacional) ────────────────────────────────────────────
 export interface InfoTicketsResponse {
   ticketsAbiertos: number;
   ticketsCerrados: number;
@@ -23,12 +24,93 @@ export interface TicketsByResponse {
   diccionario: Record<string, number>;
 }
 
+// ── Gerencial endpoint types ───────────────────────────────────────────────────
+export interface PeriodoBin {
+  periodo: string;
+  tickets: number;
+}
+
+export interface TendenciaTicketsResponse {
+  rango: { inicio: string; fin: string };
+  semanal: PeriodoBin[];
+  mensual: PeriodoBin[];
+  trimestral: PeriodoBin[];
+}
+
+export interface BacklogCriticoResponse {
+  backlogCritico: number;
+}
+
+export interface IncidenteRecurrente {
+  categoria: string;
+  ocurrencias: number;
+}
+
+export interface IncidentesRecurrentesResponse {
+  recurrentes: IncidenteRecurrente[];
+}
+
+export interface CategoriaIncidencia {
+  categoria: string;
+  ocurrencias: number;
+}
+
+export interface CategoriasMayorIncidenciaResponse {
+  top: CategoriaIncidencia | null;
+  ranking: CategoriaIncidencia[];
+}
+
+export interface SaturacionOperativaResponse {
+  totales: number;
+  atendidos: number;
+  saturacion: number | null;
+}
+
+export interface AreaDemanda {
+  area: string;
+  tickets: number;
+}
+
+export interface DemandaPorAreaResponse {
+  demanda: AreaDemanda[];
+}
+
+export interface PeriodoBinAtencion {
+  periodo: string;
+  ticketsAtendidos: number;
+}
+
+export interface ComparativoMensualResponse {
+  rango: { inicio: string; fin: string };
+  totalAtendidos: number;
+  semanal: PeriodoBinAtencion[];
+  mensual: PeriodoBinAtencion[];
+  trimestral: PeriodoBinAtencion[];
+}
+
+export interface MejoraContinuaIndicadores {
+  tasaReaperturaPct?: number;
+  ticketsReabiertos?: number;
+  cumplimientoSlaPct?: number;
+  leadTimeMedianoHoras?: number;
+  leadTimePromedioHoras?: number;
+  resueltosMenos24hPct?: number;
+  resueltosMenos72hPct?: number;
+}
+
+export interface MejoraContinuaResponse {
+  totalTickets: number;
+  indicadores: MejoraContinuaIndicadores;
+}
+
+// ── Generic fetch helper ───────────────────────────────────────────────────────
 async function apiFetch<T>(path: string): Promise<T> {
   const res = await fetch(`${BACKEND_URL}${path}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`Error ${res.status} en ${path}`);
   return res.json();
 }
 
+// ── Legacy calls ───────────────────────────────────────────────────────────────
 export const getInfoTickets = () =>
   apiFetch<InfoTicketsResponse>("/dashboard/getInfoTickets");
 
@@ -43,3 +125,34 @@ export const getCumplimientoSLA = () =>
 
 export const getTicketsBy = (by: "prioridad" | "categoria" | "reabiertos" | "analista") =>
   apiFetch<TicketsByResponse>(`/dashboard/getTicketsBy?by=${by}`);
+
+// ── Gerencial calls ────────────────────────────────────────────────────────────
+export const getTendenciaTickets = (fechaInicio: string, fechaFin: string) =>
+  apiFetch<TendenciaTicketsResponse>(
+    `/dashboard/gerencial/tendenciaTickets?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`
+  );
+
+export const getBacklogCritico = () =>
+  apiFetch<BacklogCriticoResponse>("/dashboard/gerencial/backlogCritico");
+
+export const getIncidentesRecurrentes = (limit = 5) =>
+  apiFetch<IncidentesRecurrentesResponse>(
+    `/dashboard/gerencial/incidentesRecurrentes?limit=${limit}`
+  );
+
+export const getCategoriasMayorIncidencia = () =>
+  apiFetch<CategoriasMayorIncidenciaResponse>("/dashboard/gerencial/categoriasMayorIncidencia");
+
+export const getSaturacionOperativa = () =>
+  apiFetch<SaturacionOperativaResponse>("/dashboard/gerencial/saturacionOperativa");
+
+export const getDemandaPorArea = () =>
+  apiFetch<DemandaPorAreaResponse>("/dashboard/gerencial/demandaPorArea");
+
+export const getComparativoMensual = (fechaInicio: string, fechaFin: string) =>
+  apiFetch<ComparativoMensualResponse>(
+    `/dashboard/gerencial/comparativoMensualAtencion?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`
+  );
+
+export const getMejoraContinua = () =>
+  apiFetch<MejoraContinuaResponse>("/dashboard/gerencial/mejoraContinua");
