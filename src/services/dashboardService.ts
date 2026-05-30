@@ -103,6 +103,36 @@ export interface MejoraContinuaResponse {
   indicadores: MejoraContinuaIndicadores;
 }
 
+// ── Endpoints consolidados por periodo (operacional) ───────────────────────────
+export interface RangoFechasResponse {
+  fechaInicio: string;
+  fechaFin: string;
+  totalTickets: number;
+}
+
+export interface ReporteOperacionalResponse {
+  periodo: { fechaInicio: string; fechaFin: string };
+  ticketsCreados: number;
+  ticketsAbiertos: number;
+  ticketsCerrados: number;
+  backlogTickets: number;
+  promedioPrimeraRespuestaHoras: number | null;
+  promedioAtencionHoras: number | null;
+  cumplimientoSLA: { porcentaje: number | null; withinSLA: number; violatedSLA: number };
+  ticketsPorPrioridad: Record<string, number>;
+  ticketsPorTipo: Record<string, number>;
+  ticketsPorAnalista: Record<string, number>;
+  sinDatos: boolean;
+}
+
+/** Error de API con código de estado y detalle del backend. */
+export class ApiError extends Error {
+  constructor(public status: number, public detail?: string) {
+    super(detail ?? `Error ${status}`);
+    this.name = "ApiError";
+  }
+}
+
 // ── Generic fetch helper ───────────────────────────────────────────────────────
 async function apiFetch<T>(path: string): Promise<T> {
   const res = await fetch(`${BACKEND_URL}${path}`, { cache: "no-store" });
@@ -134,6 +164,14 @@ export const getCumplimientoSLA = () =>
 
 export const getTicketsBy = (by: "prioridad" | "categoria" | "reabiertos" | "analista") =>
   apiFetch<TicketsByResponse>(`/dashboard/getTicketsBy?by=${by}`);
+
+export const getRangoFechas = () =>
+  apiFetch<RangoFechasResponse>("/dashboard/getRangoFechas");
+
+export const getReporteOperacional = (fechaInicio: string, fechaFin: string) =>
+  apiFetch<ReporteOperacionalResponse>(
+    `/dashboard/getReporteOperacional?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
+  );
 
 // ── Gerencial calls ────────────────────────────────────────────────────────────
 export const getTendenciaTickets = (fechaInicio: string, fechaFin: string) =>
