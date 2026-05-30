@@ -5,18 +5,17 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import DashboardHeader from "@/components/DashboardHeader";
 import KpiCard from "@/components/ui/KpiCard";
-import AlertCard from "@/components/ui/AlertCard";
 import GaugeChart from "@/components/charts/GaugeChart";
 import DonutChart from "@/components/charts/DonutChart";
 import BarChartVertical from "@/components/charts/BarChartVertical";
 import BarChartHorizontal from "@/components/charts/BarChartHorizontal";
-import { operacionalData } from "@/data/operacional";
+import PeriodSelector, { Periodo } from "@/components/ui/PeriodSelector";
 import {
-  getInfoTickets,
-  getTiempoPromedio,
-  getTiempoPrimeraRespuesta,
-  getCumplimientoSLA,
-  getTicketsBy,
+  getRangoFechas,
+  getReporteOperacional,
+  ApiError,
+  RangoFechasResponse,
+  ReporteOperacionalResponse,
 } from "@/services/dashboardService";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -41,42 +40,30 @@ function getPriorityColor(name: string): string {
   return PRIORITY_COLORS[name.toLowerCase()] ?? "#6366f1";
 }
 
-function formatHours(h: number): string {
+function formatHours(h: number | null): string {
+  if (h == null) return "—";
   if (h < 1) return `${Math.round(h * 60)} min`;
   const hrs = Math.floor(h);
   const mins = Math.round((h - hrs) * 60);
   return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
 }
 
-function extractReabiertos(dict: Record<string, number>): number {
-  const key = Object.keys(dict).find((k) =>
-    /reabiert|^s[ií]$/i.test(k)
-  );
-  if (key) return dict[key];
-  const vals = Object.values(dict);
-  return vals.length === 1 ? vals[0] : Math.min(...vals);
-}
-
-interface OperacionalLive {
-  ticketsAbiertos: number;
-  ticketsCerrados: number;
-  backlog: number;
-  tmo: string;
-  tpr: string;
-  cumplimientoSLA: number;
-  slaResumen: { withinSLA: number; violated: number };
-  reabiertos: number;
-  porPrioridad: { name: string; value: number; color: string }[];
-  porCategoria: { categoria: string; count: number }[];
-  porAnalista: { nombre: string; count: number }[];
-}
-
 export default function OperacionalPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const mainRef = useRef<HTMLDivElement>(null);
-  const [data, setData] = useState<OperacionalLive | null>(null);
-  const [fetchLoading, setFetchLoading] = useState(true);
+
+  const [rango, setRango] = useState<RangoFechasResponse | null>(null);
+  const [periodo, setPeriodo] = useState<Periodo | null>(null);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [report, setReport] = useState<ReporteOperacionalResponse | null>(null);
+  const [loadingRango, setLoadingRango] = useState(true);
+  const [loadingReporte, setLoadingReporte] = useState(false);
+  const [noClean, setNoClean] = useState(false);
+  const [periodoError, setPeriodoError] = useState<string | null>(null);
+  const reqIdRef = useRef(0);
+
+  const showReport = report != null && !report.sinDatos;
 
   useGSAP(() => {
     const cards = mainRef.current?.querySelectorAll(".kpi-card");
@@ -87,7 +74,7 @@ export default function OperacionalPage() {
     if (sections && sections.length > 0) {
       gsap.from(sections, { y: 20, opacity: 0, duration: 0.5, stagger: 0.1, ease: "power2.out", delay: 0.3 });
     }
-  }, { scope: mainRef, dependencies: [data] });
+  }, { scope: mainRef, dependencies: [showReport] });
 
   useEffect(() => {
     if (isLoading) return;
@@ -98,55 +85,49 @@ export default function OperacionalPage() {
     }
   }, [user, isLoading, router]);
 
+  // Cargar rango de fechas disponible al entrar
   useEffect(() => {
     if (!user || user.role !== "soporte") return;
-
-    Promise.allSettled([
-      getInfoTickets(),
-      getTiempoPromedio(),
-      getTiempoPrimeraRespuesta(),
-      getCumplimientoSLA(),
-      getTicketsBy("prioridad"),
-      getTicketsBy("categoria"),
-      getTicketsBy("analista"),
-      getTicketsBy("reabiertos"),
-    ]).then(([info, tmo, tpr, sla, prio, cat, anal, reab]) => {
-      if (info.status === "rejected") {
-        setFetchLoading(false);
-        return;
-      }
-
-      const infoVal = info.value;
-      const slaVal = sla.status === "fulfilled" ? sla.value : null;
-      const prioVal = prio.status === "fulfilled" ? prio.value.diccionario : {};
-      const catVal = cat.status === "fulfilled" ? cat.value.diccionario : {};
-      const analVal = anal.status === "fulfilled" ? anal.value.diccionario : {};
-      const reabVal = reab.status === "fulfilled" ? reab.value.diccionario : null;
-
-      const withinSLA = slaVal?.withinSLA ?? 0;
-      const violatedSLA = slaVal?.violatedSLA ?? 0;
-      const total = withinSLA + violatedSLA;
-
-      setData({
-        ticketsAbiertos: infoVal.ticketsAbiertos,
-        ticketsCerrados: infoVal.ticketsCerrados,
-        backlog: infoVal.backlogTickets,
-        tmo: tmo.status === "fulfilled" ? formatHours(tmo.value.tiempoPromedio) : "—",
-        tpr: tpr.status === "fulfilled" ? formatHours(tpr.value.tiempoPrimeraRespuesta) : "—",
-        cumplimientoSLA: total > 0 ? Math.round((withinSLA / total) * 100) : 0,
-        slaResumen: { withinSLA, violated: violatedSLA },
-        reabiertos: reabVal ? extractReabiertos(reabVal) : 0,
-        porPrioridad: Object.entries(prioVal).map(([name, value]) => ({
-          name,
-          value,
-          color: getPriorityColor(name),
-        })),
-        porCategoria: Object.entries(catVal).map(([categoria, count]) => ({ categoria, count })),
-        porAnalista: Object.entries(analVal).map(([nombre, count]) => ({ nombre, count })),
-      });
-      setFetchLoading(false);
-    });
+    setLoadingRango(true);
+    getRangoFechas()
+      .then((r) => {
+        setRango(r);
+        setNoClean(false);
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 404) setNoClean(true);
+      })
+      .finally(() => setLoadingRango(false));
   }, [user]);
+
+  const handlePeriodoChange = (fechaInicio: string, fechaFin: string, presetId: string | null) => {
+    setPeriodo({ fechaInicio, fechaFin });
+    setActivePreset(presetId);
+    setPeriodoError(null);
+    setLoadingReporte(true);
+    const reqId = ++reqIdRef.current;
+    getReporteOperacional(fechaInicio, fechaFin)
+      .then((data) => {
+        if (reqId !== reqIdRef.current) return;
+        setReport(data);
+        setNoClean(false);
+      })
+      .catch((err) => {
+        if (reqId !== reqIdRef.current) return;
+        setReport(null);
+        if (err instanceof ApiError && err.status === 404) {
+          setNoClean(true);
+        } else if (err instanceof ApiError && err.status === 422) {
+          setPeriodoError(err.detail ?? "Periodo inválido.");
+        } else {
+          setPeriodoError("No se pudo cargar el reporte.");
+        }
+      })
+      .finally(() => {
+        if (reqId !== reqIdRef.current) return;
+        setLoadingReporte(false);
+      });
+  };
 
   if (isLoading || !user) {
     return (
@@ -159,7 +140,19 @@ export default function OperacionalPage() {
     );
   }
 
-  const d = data ?? operacionalData;
+  const priorityData = report
+    ? Object.entries(report.ticketsPorPrioridad).map(([name, value]) => ({
+        name,
+        value,
+        color: getPriorityColor(name),
+      }))
+    : [];
+  const tipoData = report
+    ? Object.entries(report.ticketsPorTipo).map(([categoria, count]) => ({ categoria, count }))
+    : [];
+  const analistaData = report
+    ? Object.entries(report.ticketsPorAnalista).map(([nombre, count]) => ({ nombre, count }))
+    : [];
 
   return (
     <div className="min-h-screen" style={{ background: "var(--t-bg-base)" }}>
@@ -168,12 +161,12 @@ export default function OperacionalPage() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold" style={{ color: "var(--t-text-primary)" }}>Panel Operacional</h2>
           <span className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--t-text-muted)" }}>
-            {fetchLoading ? "Cargando datos…" : data ? "Datos en tiempo real" : "Datos de muestra"}
+            {loadingReporte ? "Cargando datos…" : showReport ? "Datos en tiempo real" : ""}
           </span>
         </div>
 
-        {/* Estado sin datos */}
-        {!fetchLoading && !data && (
+        {/* Estado sin datos limpios cargados */}
+        {!loadingRango && noClean && (
           <div
             className="rounded-xl p-8 mb-6 flex flex-col items-center gap-3 text-center anim-section"
             style={{ background: "var(--t-bg-card)", border: "1px solid var(--t-border-card)" }}
@@ -190,64 +183,99 @@ export default function OperacionalPage() {
           </div>
         )}
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-          <KpiCard titulo="Tickets Abiertos" valor={d.ticketsAbiertos} color="dark" className="kpi-card" />
-          <KpiCard titulo="Tickets Cerrados" valor={d.ticketsCerrados} color="green" className="kpi-card" />
-          <KpiCard titulo="Backlog" valor={d.backlog} color={d.backlog > 10 ? "red" : "yellow"} className="kpi-card" />
-          <KpiCard titulo="Tiempo Prom. Atencion" valor={d.tmo} className="kpi-card" />
-          <KpiCard titulo="Primera Respuesta" valor={d.tpr} className="kpi-card" />
-        </div>
-
-        {/* SLA + Reabiertos + Prioridad */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 anim-section">
-          <GaugeChart value={d.cumplimientoSLA} titulo="Cumplimiento SLA" />
-          <AlertCard titulo="Tickets Reabiertos" valor={d.reabiertos} mensaje="Incidencias que volvieron a fallar" />
-          <DonutChart data={d.porPrioridad} titulo="Tickets por Prioridad" />
-        </div>
-
-        {/* SLA Resumen + Fuente */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 anim-section">
-          <div className="rounded-xl p-5" style={cardStyle}>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--t-text-muted)" }}>
-              Estado de SLA
-            </p>
-            <div className="flex gap-4">
-              <div className="flex-1 rounded-lg p-4 text-center" style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}>
-                <p className="text-2xl font-bold tabular-nums" style={{ color: "#22c55e" }}>{d.slaResumen.withinSLA}</p>
-                <p className="text-xs mt-1" style={{ color: "#16a34a" }}>Within SLA</p>
-              </div>
-              <div className="flex-1 rounded-lg p-4 text-center" style={{ background: "rgba(207,7,0,0.08)", border: "1px solid rgba(207,7,0,0.3)" }}>
-                <p className="text-2xl font-bold tabular-nums" style={{ color: "#e73137" }}>{d.slaResumen.violated}</p>
-                <p className="text-xs mt-1" style={{ color: "#cf0700" }}>SLA Violated</p>
-              </div>
-            </div>
+        {/* Selector de periodo */}
+        {!noClean && (
+          <div className="mb-6">
+            <PeriodSelector
+              rango={rango ? { fechaInicio: rango.fechaInicio, fechaFin: rango.fechaFin } : null}
+              value={periodo}
+              activePreset={activePreset}
+              onChange={handlePeriodoChange}
+              disabled={loadingRango}
+            />
           </div>
-          <div className="rounded-xl p-5" style={cardStyle}>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--t-text-muted)" }}>
-              Tickets por Fuente
+        )}
+
+        {/* Error de periodo (422) */}
+        {periodoError && (
+          <div
+            className="rounded-xl p-4 mb-6 text-sm"
+            style={{ background: "rgba(207,7,0,0.08)", border: "1px solid rgba(207,7,0,0.3)", color: "#cf0700" }}
+          >
+            {periodoError}
+          </div>
+        )}
+
+        {/* Guía: aún no se elige periodo */}
+        {!noClean && !periodo && !loadingRango && (
+          <div
+            className="rounded-xl p-8 flex flex-col items-center gap-2 text-center anim-section"
+            style={cardStyle}
+          >
+            <p className="font-semibold" style={{ color: "var(--t-text-primary)" }}>Selecciona un periodo</p>
+            <p className="text-sm max-w-sm" style={{ color: "var(--t-text-muted)" }}>
+              Elige un rango de fechas arriba para ver el reporte operacional.
             </p>
-            <div className="space-y-3">
-              {operacionalData.porFuente.map((item) => (
-                <div key={item.fuente} className="flex items-center justify-between">
-                  <span className="text-sm" style={{ color: "var(--t-text-primary)" }}>{item.fuente}</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-32 h-2 rounded-full overflow-hidden" style={{ background: "var(--t-border-subtle)" }}>
-                      <div className="h-full rounded-full" style={{ width: `${(item.count / 128) * 100}%`, background: "linear-gradient(90deg, #6366f1, #8b5cf6)" }} />
-                    </div>
-                    <span className="text-sm font-semibold w-8 text-right tabular-nums" style={{ color: "var(--t-text-primary)" }}>{item.count}</span>
+          </div>
+        )}
+
+        {/* Periodo sin tickets */}
+        {!noClean && periodo && report?.sinDatos && !loadingReporte && (
+          <div
+            className="rounded-xl p-8 flex flex-col items-center gap-2 text-center anim-section"
+            style={cardStyle}
+          >
+            <p className="font-semibold" style={{ color: "var(--t-text-primary)" }}>Sin tickets en el periodo</p>
+            <p className="text-sm max-w-sm" style={{ color: "var(--t-text-muted)" }}>
+              No hay tickets en el periodo seleccionado. Prueba con otro rango de fechas.
+            </p>
+          </div>
+        )}
+
+        {showReport && report && (
+          <>
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+              <KpiCard titulo="Tickets Creados" valor={report.ticketsCreados} className="kpi-card" />
+              <KpiCard titulo="Tickets Abiertos" valor={report.ticketsAbiertos} color="dark" className="kpi-card" />
+              <KpiCard titulo="Tickets Cerrados" valor={report.ticketsCerrados} color="green" className="kpi-card" />
+              <KpiCard titulo="Backlog" valor={report.backlogTickets} color={report.backlogTickets > 10 ? "red" : "yellow"} className="kpi-card" />
+              <KpiCard titulo="Tiempo Prom. Atencion" valor={formatHours(report.promedioAtencionHoras)} className="kpi-card" />
+              <KpiCard titulo="Primera Respuesta" valor={formatHours(report.promedioPrimeraRespuestaHoras)} className="kpi-card" />
+            </div>
+
+            {/* SLA + Prioridad */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 anim-section">
+              <GaugeChart value={Math.round(report.cumplimientoSLA.porcentaje ?? 0)} titulo="Cumplimiento SLA" />
+              <DonutChart data={priorityData} titulo="Tickets por Prioridad" />
+            </div>
+
+            {/* SLA Resumen */}
+            <div className="grid grid-cols-1 gap-4 mb-6 anim-section">
+              <div className="rounded-xl p-5" style={cardStyle}>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--t-text-muted)" }}>
+                  Estado de SLA
+                </p>
+                <div className="flex gap-4">
+                  <div className="flex-1 rounded-lg p-4 text-center" style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}>
+                    <p className="text-2xl font-bold tabular-nums" style={{ color: "#22c55e" }}>{report.cumplimientoSLA.withinSLA}</p>
+                    <p className="text-xs mt-1" style={{ color: "#16a34a" }}>Within SLA</p>
+                  </div>
+                  <div className="flex-1 rounded-lg p-4 text-center" style={{ background: "rgba(207,7,0,0.08)", border: "1px solid rgba(207,7,0,0.3)" }}>
+                    <p className="text-2xl font-bold tabular-nums" style={{ color: "#e73137" }}>{report.cumplimientoSLA.violatedSLA}</p>
+                    <p className="text-xs mt-1" style={{ color: "#cf0700" }}>SLA Violated</p>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 anim-section">
-          <BarChartVertical data={d.porCategoria} titulo="Tickets por Categoria" />
-          <BarChartHorizontal data={d.porAnalista} titulo="Tickets por Analista" />
-        </div>
+            {/* Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 anim-section">
+              <BarChartVertical data={tipoData} titulo="Tickets por Tipo" />
+              <BarChartHorizontal data={analistaData} titulo="Tickets por Analista" />
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
